@@ -23,7 +23,7 @@ char endOfHeaders[] = "\r\n\r\n";
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xEF }; // CHANGE THIS IF YOU'VE GOT MORE THAN ONE Arduino
 
 //EthernetServer server(80); // port 80
-String relay_id = "gsiot-ypf7-s06d"; //Fill your relay_id from Yaler.net
+String relay_id = "XXX"; //Fill your relay_id from Yaler.net
 YalerEthernetServer server("try.yaler.net", 80, relay_id);
 
 
