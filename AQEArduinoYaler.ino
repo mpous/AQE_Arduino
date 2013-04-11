@@ -30,8 +30,7 @@ EthernetClient client;
 
 
 //EthernetServer server(80); // port 80
-YalerEthernetServer server("try.yaler.net", 80, "gsiot-ypf7-s06d");
-//YalerEthernetServer server("try.yaler.net", 80, "gsiot-vfn8-qwc0");
+YalerEthernetServer server("try.yaler.net", 80, "FILL_YALER_RELAY_URL");
 
 unsigned long lastConnectionTime = 0;          // last time you connected to the server, in econds
 boolean lastConnected = false;                 // state of the connection last time through the main loop
