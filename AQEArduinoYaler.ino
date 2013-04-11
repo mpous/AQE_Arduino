@@ -3,9 +3,12 @@
 #include <TextFinder.h>
 #include <YalerEthernetServer.h>
 #include <DHT.h>
-#include<stdlib.h>
+#include <stdlib.h>
 #include "Wire.h"
 #include "EggBus.h"
+
+#define API_KEY "OOk5W0LuZF4qId5F2waoTd20DwuSAKxDMDJGLzZ3Yml0Zz0g" // your Cosm API key
+#define FEED_ID 123333 // your Cosm feed ID
 
 EggBus eggBus;
 uint8_t egg_bus_address;
@@ -22,9 +25,17 @@ char endOfHeaders[] = "\r\n\r\n";
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xEF }; // CHANGE THIS IF YOU'VE GOT MORE THAN ONE Arduino
 
+
+EthernetClient client;
+
+
 //EthernetServer server(80); // port 80
-String relay_id = "gsiot-ypf7-s06d"; //Fill your relay_id from Yaler.net
-YalerEthernetServer server("try.yaler.net", 80, relay_id);
+YalerEthernetServer server("try.yaler.net", 80, "gsiot-ypf7-s06d");
+//YalerEthernetServer server("try.yaler.net", 80, "gsiot-vfn8-qwc0");
+
+unsigned long lastConnectionTime = 0;          // last time you connected to the server, in econds
+boolean lastConnected = false;                 // state of the connection last time through the main loop
+const unsigned long postingInterval = 10*1000; //delay between updates to Cosm.com
 
 
 void setup() 
@@ -49,7 +60,7 @@ void sendResponse(EthernetClient client)
   client.println();
   client.println("<h1>Arduino Yaler Air Quality Egg Web Service</h1>");
   client.println("<a href='/aqe.json'>GET AQE JSON</a><br><br>");
-  client.println("<a href='/cosm.json'>GET AQE JSON for Cosm</a><br><br><br>");
+  client.println("<a href='/aqe.csv'>GET AQE CSV for Cosm</a><br><br><br>");
   client.println("Build by <a href='http://marcpous.com'>Marc Pous</a> and Yaler");
 }
 
@@ -67,15 +78,12 @@ void sendNotFound(EthernetClient client) {
 
 
 
-void sendCosmJSON(EthernetClient client)
+void sendCSV(EthernetClient client)
 {
   client.println("HTTP/1.1 200 OK");
-  client.println("Content-Type: text/html");
+  client.println("Content-Type: text/csv");
   client.println();
 
-  client.print("{");
-  client.print("\"version\":\"1.0.0\",");
-  client.print("\"datastreams\":[");
 
   //Temperature
   float currentTemp = getTemperature();
@@ -84,9 +92,8 @@ void sendCosmJSON(EthernetClient client)
       Serial.println(currentTemp, 2);
     }
 
-  client.print("{\"id\":\"temperature\", \"current_value\": \"");
-  client.print(currentTemp);
-  client.print("\"}, ");
+  client.print("Temperature, ");
+  client.println(currentTemp);
   
   //Humidity
   float currHumidity = getHumidity();
@@ -95,9 +102,64 @@ void sendCosmJSON(EthernetClient client)
     Serial.println(currHumidity, 2);
   }
 
-  client.print("{\"id\":\"humidity\", \"current_value\": \"");
+  client.print("Humidity, ");
+  client.println(currHumidity);
+  
+  //AQE
+  eggBus.init();
+
+  // Capture the gas sensors from the egg bus
+  // Note we're not capturing the units or resistance of the sensors here
+  while((egg_bus_address = eggBus.next())) {
+    uint8_t numSensors = eggBus.getNumSensors();
+    for(uint8_t ii = 0; ii < numSensors; ii++) 
+    {
+      //CSV print
+      client.print(eggBus.getSensorType(ii));
+      client.print(", ");
+      client.println(eggBus.getSensorValue(ii), 4);
+      
+      //Serial print
+      Serial.print(eggBus.getSensorType(ii));
+      Serial.print(",");
+      Serial.println(eggBus.getSensorValue(ii), 4);
+    }
+  }
+}
+
+
+void sendJSON(EthernetClient client)
+{
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-Type: application/json");
+  client.println();
+
+  client.print("{");
+  
+  client.println("\"version\":\"1.0.0\",");
+  client.println("\"datastreams\":[");
+    
+  //Temperature
+  float currentTemp = getTemperature();
+  if (currentTemp != -1) {
+      Serial.print("Temperature,");
+      Serial.println(currentTemp, 2);
+    }
+
+  client.print("{\"id\": \"temperature\", \"value\": \"");
+  client.print(currentTemp);
+  client.println("\"},");
+  
+  //Humidity
+  float currHumidity = getHumidity();
+  if (currHumidity != -1) {
+    Serial.print("Humidity,");
+    Serial.println(currHumidity, 2);
+  }
+
+  client.print("{\"id\": \"humidity\", \"value\": \"");
   client.print(currHumidity);
-  client.print("\"}, ");
+  client.println("\"},");
   
   //AQE
   eggBus.init();
@@ -110,9 +172,9 @@ void sendCosmJSON(EthernetClient client)
       if (ii > 0) client.println(",");
 
       //JSON print
-      client.print("{\"id\":\"");
+      client.print("{\"id\": \"");
       client.print(eggBus.getSensorType(ii));
-      client.print("\", \"current_value\": \"");
+      client.print("\", \"value\" : \"");
       client.print(eggBus.getSensorValue(ii), 4);
       client.print("\"}");
       
@@ -122,19 +184,13 @@ void sendCosmJSON(EthernetClient client)
       Serial.println(eggBus.getSensorValue(ii), 4);
     }
   }
-  client.print("]");
+
+  client.println("]");
   client.print("}");
 }
 
-
-void sendJSON(EthernetClient client)
+void sendSerial()
 {
-  client.println("HTTP/1.1 200 OK");
-  client.println("Content-Type: text/html");
-  client.println();
-
-  client.print("{");
-    
   //Temperature
   float currentTemp = getTemperature();
   if (currentTemp != -1) {
@@ -142,20 +198,12 @@ void sendJSON(EthernetClient client)
       Serial.println(currentTemp, 2);
     }
 
-  client.print("\"temperature\" : \"");
-  client.print(currentTemp);
-  client.print("\", ");
-  
   //Humidity
   float currHumidity = getHumidity();
   if (currHumidity != -1) {
     Serial.print("Humidity,");
     Serial.println(currHumidity, 2);
   }
-
-  client.print("\"humidity\" : \"");
-  client.print(currHumidity);
-  client.print("\", ");
   
   //AQE
   eggBus.init();
@@ -165,29 +213,36 @@ void sendJSON(EthernetClient client)
   while((egg_bus_address = eggBus.next())) {
     uint8_t numSensors = eggBus.getNumSensors();
     for(uint8_t ii = 0; ii < numSensors; ii++) {
-      if (ii > 0) client.println(",");
-
-      //JSON print
-      client.print("\"");
-      client.print(eggBus.getSensorType(ii));
-      client.print("\" : \"");
-      client.print(eggBus.getSensorValue(ii), 4);
-      client.print("\"");
-      
       //Serial print
       Serial.print(eggBus.getSensorType(ii));
       Serial.print(",");
       Serial.println(eggBus.getSensorValue(ii), 4);
     }
   }
-  client.print("}");
+
 }
 
 
+
 void loop() {
-  EthernetClient client = server.available();
-  if (client && client.connected()) 
+    
+  sendSerial();
+  Serial.println("------------------");
+    
+  client = server.available();
+  
+  // if you're not connected, and ten seconds have passed since
+  // your last connection, then connect again and send data:
+  /*
+  if(!client.connected() && (millis() - lastConnectionTime > postingInterval)) 
   {
+    sendSerial();
+    Serial.print("------------------");
+  }
+  */
+
+  if (client && client.connected()) 
+  {    
     TextFinder finder(client); // helper to read request
     // Receive first line of HTTP request, which looks like this:
     // Request-Line = Method SP Request-URI SP HTTP-Version CRLF
@@ -217,9 +272,9 @@ void loop() {
    {
       sendJSON(client);
    }
-   else if(requestMethod.equals("GET") && requestUri.equals("/cosm.json"))
+   else if(requestMethod.equals("GET") && requestUri.equals("/aqe.csv"))
    {
-     sendCosmJSON(client);
+     sendCSV(client);
    }
    /*
    else if (requestMethod.equals("POST") && requestUri.equals("/") && (contentLength > 0)) {
@@ -245,6 +300,8 @@ void loop() {
     client.stop();
   }
 }
+
+
 
 //--------- DHT22 humidity ---------
 float getHumidity(){
