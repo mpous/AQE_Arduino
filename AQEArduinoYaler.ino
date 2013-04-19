@@ -7,8 +7,6 @@
 #include "Wire.h"
 #include "EggBus.h"
 
-#define API_KEY "OOk5W0LuZF4qId5F2waoTd20DwuSAKxDMDJGLzZ3Yml0Zz0g" // your Cosm API key
-#define FEED_ID 123333 // your Cosm feed ID
 
 EggBus eggBus;
 uint8_t egg_bus_address;
@@ -28,13 +26,12 @@ byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xEF }; // CHANGE THIS IF YOU'VE GO
 
 EthernetClient client;
 
-
-//EthernetServer server(80); // port 80
-YalerEthernetServer server("try.yaler.net", 80, "FILL_YALER_RELAY_URL");
+YalerEthernetServer server("try.yaler.net", 80, "YALER_TOKEN");
 
 unsigned long lastConnectionTime = 0;          // last time you connected to the server, in econds
 boolean lastConnected = false;                 // state of the connection last time through the main loop
 const unsigned long postingInterval = 10*1000; //delay between updates to Cosm.com
+
 
 
 void setup() 
